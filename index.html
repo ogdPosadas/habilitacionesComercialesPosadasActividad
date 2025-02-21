@@ -11,7 +11,7 @@
     <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.Default.css" />
 
     <!-- Bootstrap -->
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://unpkg.com/leaflet.markercluster/dist/leaflet.markercluster.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
@@ -114,13 +114,21 @@
         h2 {
             font-size: 2.4vw;
         }
+        .btn-group button.active {
+            background-color: #2ca25f; /* Color activo */
+            color: white;
+        }
+
+        .btn-group button.active:hover {
+            background-color: #006d2c; /* Color de hover cuando está activo */
+        }
     </style>
 </head>
 <body>
     <div class="container-grid">
         <nav class="navbar navbar-dark fixed-top" style="background-color: #003928;">
             <div class="container-fluid">
-                <a class="navbar-brand" href="index.html" style="padding-left: 10px;">
+                <a class="navbar-brand" href="habilitacionesUnificado.html" style="padding-left: 10px;">
                     <img src="assets/LOGO POSADAS BLANCO.png" alt="Logo Posadas" width="20%">
                 </a>
             </div>
@@ -129,8 +137,13 @@
         <div class="main">
             <div class="infoExtra" id="infoExtra">
                 <h2>Actividades comerciales</h2>
-                <input type="text" id="buscador-concepto" class="form-control" placeholder="Buscar por actividad comercial...">
-                <!-- Contenedor de la lista de sectores con scroll -->
+                <div class="btn-group">
+                    <button class="btn btn-secondary" onclick="cambiarModo('idgis')">Buscar por IDGIS</button>
+                    <button class="btn btn-secondary" onclick="cambiarModo('actividad')">Buscar por Actividad</button>
+                </div>
+                <input type="text" id="buscador-idgis" class="form-control" placeholder="Buscar por IDGIS...">
+                <input type="text" id="buscador-concepto" class="form-control" placeholder="Buscar por actividad comercial..."
+                  style="display:none;">
                 <div id="sector-list-container">
                     <ul id="sector-list"></ul>
                 </div>
@@ -153,16 +166,54 @@
         var geojsonData = null;
         var distritosFiltrados = [];
         var markerCluster = L.markerClusterGroup();
-    
-        // Cargar actividades.json
-        fetch('actividades2.json')
-            .then(response => response.json())
-            .then(data => {
-                actividades = data;
-                actualizarListaSectores();
-            })
-            .catch(error => console.error("Error cargando actividades2.json:", error));
-    
+
+        function asignarEventosBusqueda() {
+            document.getElementById("buscador-idgis").removeEventListener("input", buscarPorIDGIS);
+            document.getElementById("buscador-concepto").removeEventListener("input", buscarConcepto);
+
+            if (modoActual === 'idgis') {
+                document.getElementById("buscador-idgis").addEventListener("input", buscarPorIDGIS);
+            } else {
+                document.getElementById("buscador-concepto").addEventListener("input", buscarConcepto);
+            }
+        }
+
+        function cambiarModo(modo) {
+            modoActual = modo;
+            document.getElementById("buscador-idgis").style.display = (modo === 'idgis') ? 'block' : 'none';
+            document.getElementById("buscador-concepto").style.display = (modo === 'actividad') ? 'block' : 'none';
+            // Remover la clase 'active' de ambos botones
+            const botones = document.querySelectorAll('.btn-group button');
+            botones.forEach(boton => boton.classList.remove('active'));
+
+            // Agregar la clase 'active' al botón seleccionado
+            if (modo === 'idgis') {
+                document.querySelector('.btn-group button:nth-child(1)').classList.add('active');
+            } else {
+                document.querySelector('.btn-group button:nth-child(2)').classList.add('active');
+            }
+            cargarDatos();
+            asignarEventosBusqueda();  // Asegúrate de asignar los eventos después de cambiar el modo
+        }
+        // Función que se ejecuta al cargar la página para configurar el modo inicial
+        window.onload = function() {
+            cambiarModo('idgis');  // Inicia en 'Buscar por IDGIS'
+        }
+        function cargarDatos() {
+            let archivo = (modoActual === 'idgis') ? 'actividades.json' : 'actividades2.json';
+            fetch(archivo)
+                .then(response => response.json())
+                .then(data => {
+                    actividades = data;
+                    if (modoActual === 'actividad') {
+                        actualizarListaSectoresActividad();
+                    } else {
+                        actualizarListaSectoresIDGIS();
+                    }
+                })
+                .catch(error => console.error("Error cargando datos:", error));
+        }
+
         // Crear función debounce
         function debounce(func, delay) {
             let timeoutId;
@@ -171,14 +222,70 @@
                 timeoutId = setTimeout(() => func.apply(this, args), delay);
             };
         }
-    
+
+        // Buscadores
+        // IDGIS 
+        function buscarPorIDGIS() {
+            var idgisSeleccionado = document.getElementById("buscador-idgis").value.trim();
+            if (!idgisSeleccionado) {
+                distritosFiltrados = [];
+                actualizarListaSectoresIDGIS();
+                return;
+            }
+            if (geojsonData) {
+                // Buscar en geojsonData el polígono con el IDGIS seleccionado
+                var featureEncontrado = geojsonData.features.find(feature => feature.properties.IDGIS == idgisSeleccionado);
+
+                if (featureEncontrado) {
+                    // Obtener el DISTRITO correspondiente
+                    distritosFiltrados = [featureEncontrado.properties.DISTRITO.trim().toLowerCase()];
+                    let customPopup = `
+                    <h2 style="font-size: 1vw;">
+                        IDGIS: ${featureEncontrado.properties.IDGIS}
+                    </h2>
+                    <p>Datos:</p>
+                    <ul>
+                        <li>Sección: ${featureEncontrado.properties.SEC}</li>
+                        <li>Chacra: ${featureEncontrado.properties.CHA}</li>
+                        <li>Manzana: ${featureEncontrado.properties.MAN}</li>
+                        <li>Parcela: ${featureEncontrado.properties.PAR}</li>
+                        <li>Lote: ${featureEncontrado.properties.LOTE}</li>
+                        <li>Distrito: ${featureEncontrado.properties.DISTRITO}</li>
+                    </ul>
+                    `;
+                    // Centrar y hacer zoom en el polígono
+                    var bounds = L.geoJson(featureEncontrado).getBounds();
+                    map.fitBounds(bounds, { padding: [50, 50] });
+
+                    // Agregarlo al mapa con estilo resaltado
+                    if (geojsonLayer) {
+                        map.removeLayer(geojsonLayer);
+                    }
+                    geojsonLayer = L.geoJson(featureEncontrado, {
+                        style: {
+                            fillColor: "red",  // Color resaltado
+                            color: "black",
+                            weight: 2,
+                            fillOpacity: 0.7
+                        },
+                        onEachFeature: function (feature, layer) {
+                            layer.bindPopup(customPopup).openPopup();
+                        }
+                    }).addTo(map);
+                }
+
+                actualizarListaSectoresIDGIS();
+            }
+        }
+
+        // Actividades
         // Función para manejar la búsqueda con debounce
         const buscarConcepto = debounce(function() {
             var conceptoSeleccionado = document.getElementById("buscador-concepto").value.trim().toLowerCase();
     
             if (!conceptoSeleccionado) {
                 distritosFiltrados = [];
-                actualizarListaSectores();
+                actualizarListaSectoresActividad();
                 return;
             }
     
@@ -188,24 +295,22 @@
                 .map(a => a.DISTRITO.trim().toLowerCase());
     
             // Actualizar lista de sectores con el filtro
-            actualizarListaSectores(conceptoSeleccionado);
+            actualizarListaSectoresActividad(conceptoSeleccionado);
     
             // Si hay resultados, filtrar el mapa
             if (distritosFiltrados.length > 0) {
-                filtrarMapa(conceptoSeleccionado);
+                filtrarMapaActividades(conceptoSeleccionado);
                 resaltarSeleccion(conceptoSeleccionado);
             } else {
                 // Si no hay coincidencias, limpiar el mapa y lista
-                filtrarMapa(null);
+                filtrarMapaActividades(null);
                 resaltarSeleccion(null);
             }
         }, 400);  // 400 ms de retraso
-    
-        // Asociar la función de búsqueda al evento de input
-        document.getElementById("buscador-concepto").addEventListener("input", buscarConcepto);
-    
-        // Llenar la lista en infoExtra con sectores
-        function actualizarListaSectores(filtroTexto = "") {
+        
+        // Actualizar lista de sectores dependiendo si es actividad o IDGIS
+        // Llenar la lista en infoExtra con actividades
+        function actualizarListaSectoresActividad(filtroTexto = "") {
             var listaSectores = document.getElementById("sector-list");
     
             var actividadesFiltradas = actividades.filter(a => 
@@ -226,7 +331,7 @@
             opcionNinguno.textContent = "Ninguno";
             opcionNinguno.classList.add("sector-item");
             opcionNinguno.addEventListener("click", function() {
-                filtrarMapa(null);
+                filtrarMapaActividades(null);
                 resaltarSeleccion(null);
             });
             listaSectores.appendChild(opcionNinguno);
@@ -237,7 +342,7 @@
                 li.textContent = actividad;
                 li.classList.add("sector-item");
                 li.addEventListener("click", function() {
-                    filtrarMapa(actividad);
+                    filtrarMapaActividades(actividad);
                     resaltarSeleccion(actividad);
                 });
                 listaSectores.appendChild(li);
@@ -247,12 +352,54 @@
                 cargarGeoJSON(null);
             }
         }
-    
+
+        // sectores de IDGIS
+        function actualizarListaSectoresIDGIS() {
+            var listaSectores = document.getElementById("sector-list");
+            
+            // Si hay filtro de IDGIS, se filtran actividades según los distritos encontrados
+            var actividadesFiltradas = distritosFiltrados.length > 0 
+                ? actividades.filter(a => distritosFiltrados.includes(a.DISTRITO.trim().toLowerCase()))
+                : actividades;
+
+            var actividadesUnicas = [...new Set(actividadesFiltradas.map(a => a.Actividad))];
+
+            // Limpiar opciones anteriores
+            listaSectores.innerHTML = "";
+
+            // Agregar opción "Ninguno"
+            var opcionNinguno = document.createElement("li");
+            opcionNinguno.textContent = "Ninguno";
+            opcionNinguno.classList.add("sector-item");
+            opcionNinguno.addEventListener("click", function() {
+                filtrarMapaIDGIS(null); // Limpia el mapa
+                resaltarSeleccion(null);
+            });
+            listaSectores.appendChild(opcionNinguno);
+
+            // Agregar las actividades únicas filtradas
+            actividadesUnicas.forEach(actividad => {
+                var li = document.createElement("li");
+                li.textContent = actividad;
+                li.classList.add("sector-item"); // Clase para resaltar selección
+                li.addEventListener("click", function() {
+                    filtrarMapaIDGIS(actividad);
+                    resaltarSeleccion(actividad);
+                });
+                listaSectores.appendChild(li);
+            });
+
+            // Si no hay filtro por IDGIS, cargar todos los sectores en el mapa
+            if (distritosFiltrados.length === 0) {
+                cargarGeoJSON(null);
+            }
+        }
+
         // Función para resaltar la actividad seleccionada
         function resaltarSeleccion(actividadSeleccionada) {
             document.querySelectorAll("#sector-list li").forEach(li => {
                 if (li.textContent === actividadSeleccionada) {
-                    li.style.backgroundColor = "#4CAF50";
+                    li.style.backgroundColor = "#4CAF50"; // Verde para destacar
                     li.style.color = "white";
                 } else {
                     li.style.backgroundColor = "";
@@ -260,20 +407,25 @@
                 }
             });
         }
-    
+
         // Cargar el archivo GeoJSON
         function cargarGeoJSON(actividadInicial) {
             fetch('secciones_unificado.geojson')
                 .then(response => response.json())
                 .then(data => {
                     geojsonData = data;
-                    filtrarMapa(actividadInicial);
+                    if (modoActual === 'actividad') {
+                        filtrarMapaActividades(actividadInicial);
+                    } else {
+                        filtrarMapaIDGIS(actividadInicial);
+                    }
                 })
                 .catch(error => console.error("Error cargando el GeoJSON:", error));
         }
-    
-        // Filtrar y actualizar el mapa basado en la actividad seleccionada
-        function filtrarMapa(actividadSeleccionada) {
+
+        // filtrar mapas 
+        // Actividades
+        function filtrarMapaActividades(actividadSeleccionada) {
             if (!actividadSeleccionada) {
                 if (geojsonLayer) {
                     map.removeLayer(geojsonLayer);
@@ -331,6 +483,73 @@
                 }
             });
     
+            map.addLayer(markerCluster);
+            map.addLayer(geojsonLayer);
+        }
+
+        // IDGIS
+        // Filtrar y actualizar el mapa basado en la actividad seleccionada
+        function filtrarMapaIDGIS(actividadForzada = null) {
+            var actividadSeleccionada = actividadForzada;
+
+            if (!actividadSeleccionada) {
+                // Si es "Ninguno", limpiar el mapa completamente
+                if (geojsonLayer) {
+                    map.removeLayer(geojsonLayer);
+                }
+                markerCluster.clearLayers();
+                return;
+            }
+
+            var distritosFiltrados = actividades
+                .filter(a => a.Actividad === actividadSeleccionada)
+                .map(a => a.DISTRITO ? a.DISTRITO.trim().toLowerCase() : "");
+
+            if (!geojsonData) {
+                console.error("GeoJSON aún no está cargado.");
+                return;
+            }
+
+            if (geojsonLayer) {
+                map.removeLayer(geojsonLayer);
+            }
+            markerCluster.clearLayers();
+
+            geojsonLayer = L.geoJson(geojsonData, {
+                filter: function(feature) {
+                    var distritoGeo = feature.properties.DISTRITO ? feature.properties.DISTRITO.trim().toLowerCase() : "";
+                    return distritosFiltrados.includes(distritoGeo);
+                },
+                style: function(feature) {
+                    return {
+                        fillColor: "blue",
+                        color: "black",
+                        weight: 1,
+                        fillOpacity: 0.5
+                    };
+                },
+                onEachFeature: function(feature, layer) {
+                    if (feature.properties && feature.properties.DISTRITO) {
+                        let customPopup = `
+                        <h2 style="font-size: 1vw;">
+                            IDGIS: ${feature.properties.IDGIS}
+                        </h2>
+                        <p>Datos:</p>
+                        <ul>
+                            <li>Sección: ${feature.properties.SEC}</li>
+                            <li>Chacra: ${feature.properties.CHA}</li>
+                            <li>Manzana: ${feature.properties.MAN}</li>
+                            <li>Parcela: ${feature.properties.PAR}</li>
+                            <li>Lote: ${feature.properties.LOTE}</li>
+                            <li>Distrito: ${feature.properties.DISTRITO}</li>
+                        </ul>
+                        `;
+                        layer.bindPopup(customPopup);
+                    }
+                    markerCluster.addLayer(layer);
+                }
+            });
+
             map.addLayer(markerCluster);
             map.addLayer(geojsonLayer);
         }
