@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mapa con Clústeres</title>
+    
+    <!-- Leaflet y MarkerCluster -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.Default.css" />
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/leaflet.markercluster/dist/leaflet.markercluster.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
+    <style>
+        html, body {
+            height: 100%;
+            margin: 0;
+            font-family: 'Montserrat', sans-serif;
+            background-color: #f8f9fa;
+        }
+
+        .container-grid {
+            display: grid;
+            grid-template-rows: auto 1fr;
+            height: 100vh;
+        }
+
+        .navbar {
+            position: sticky;
+            top: 0;
+            width: 100%;
+            z-index: 1000;
+        }
+
+        .main {
+            display: grid;
+            grid-template-columns: 50% 50%;
+            gap: 10px;
+            padding: 10px;
+            height: 100%;
+        }
+
+        .infoExtra {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            overflow-y: auto;
+        }
+        #sector-list-container {
+            height: 80vh; /* 80% del viewport */
+            overflow-y: auto; /* Para hacer scroll si hay muchos sectores */
+            display: flex;
+            flex-direction: column;
+            border: 1px solid #ccc;
+            padding: 10px;
+            border-radius: 5px;
+            background: white;
+        }
+
+        #sector-list {
+            list-style: none;
+            padding: 0;
+        }
+
+        #sector-list li {
+            cursor: pointer;
+            padding: 5px;
+            border-bottom: 1px solid #ddd;
+        }
+
+        #sector-list li:hover {
+            background-color: #e0e0e0;
+        }   
+        .sector-item {
+            cursor: pointer;
+            padding: 5px;
+            border-bottom: 1px solid #ddd;
+        }
+
+        .sector-item:hover {
+            background-color: #e0e0e0;
+        }
+
+        /* Resaltar la actividad seleccionada */
+        .sector-item.active {
+            background-color: #28a745; /* Verde de Bootstrap */
+            color: white;
+            font-weight: bold;
+        }
+        .map-container {
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+        }
+
+        .btn-group {
+            margin-bottom: 10px;
+        }
+
+        #map {
+            flex-grow: 1;
+            height: 100%;
+        }
+
+        .dropdown-menu {
+            z-index: 1050;
+        }
+
+        h2 {
+            font-size: 2.4vw;
+        }
+    </style>
+</head>
+<body>
+    <div class="container-grid">
+        <nav class="navbar navbar-dark fixed-top" style="background-color: #003928;">
+            <div class="container-fluid">
+                <a class="navbar-brand" href="index.html" style="padding-left: 10px;">
+                    <img src="assets/LOGO POSADAS BLANCO.png" alt="Logo Posadas" width="20%">
+                </a>
+            </div>
+        </nav>
+    
+        <div class="main">
+            <div class="infoExtra" id="infoExtra">
+                <h2>Actividades comerciales</h2>
+                <input type="text" id="buscador-concepto" class="form-control" placeholder="Buscar por actividad comercial...">
+                <!-- Contenedor de la lista de sectores con scroll -->
+                <div id="sector-list-container">
+                    <ul id="sector-list"></ul>
+                </div>
+            </div>
+            <div>
+                <div id="map"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        var map = L.map('map').setView([-27.370373, -55.892994], 12);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; OpenStreetMap contributors'
+        }).addTo(map);
+    
+        var geojsonData;
+        var geojsonLayer;
+        var actividades = [];
+        var geojsonData = null;
+        var distritosFiltrados = [];
+        var markerCluster = L.markerClusterGroup();
+    
+        // Cargar actividades.json
+        fetch('actividades2.json')
+            .then(response => response.json())
+            .then(data => {
+                actividades = data;
+                actualizarListaSectores();
+            })
+            .catch(error => console.error("Error cargando actividades2.json:", error));
+    
+        // Crear función debounce
+        function debounce(func, delay) {
+            let timeoutId;
+            return function (...args) {
+                clearTimeout(timeoutId);
+                timeoutId = setTimeout(() => func.apply(this, args), delay);
+            };
+        }
+    
+        // Función para manejar la búsqueda con debounce
+        const buscarConcepto = debounce(function() {
+            var conceptoSeleccionado = document.getElementById("buscador-concepto").value.trim().toLowerCase();
+    
+            if (!conceptoSeleccionado) {
+                distritosFiltrados = [];
+                actualizarListaSectores();
+                return;
+            }
+    
+            // Filtrar en actividades los DISTRITO que tienen el concepto buscado
+            distritosFiltrados = actividades
+                .filter(a => a.Concepto.toLowerCase().includes(conceptoSeleccionado))
+                .map(a => a.DISTRITO.trim().toLowerCase());
+    
+            // Actualizar lista de sectores con el filtro
+            actualizarListaSectores(conceptoSeleccionado);
+    
+            // Si hay resultados, filtrar el mapa
+            if (distritosFiltrados.length > 0) {
+                filtrarMapa(conceptoSeleccionado);
+                resaltarSeleccion(conceptoSeleccionado);
+            } else {
+                // Si no hay coincidencias, limpiar el mapa y lista
+                filtrarMapa(null);
+                resaltarSeleccion(null);
+            }
+        }, 400);  // 400 ms de retraso
+    
+        // Asociar la función de búsqueda al evento de input
+        document.getElementById("buscador-concepto").addEventListener("input", buscarConcepto);
+    
+        // Llenar la lista en infoExtra con sectores
+        function actualizarListaSectores(filtroTexto = "") {
+            var listaSectores = document.getElementById("sector-list");
+    
+            var actividadesFiltradas = actividades.filter(a => 
+                distritosFiltrados.length > 0 
+                    ? distritosFiltrados.includes(a.DISTRITO.trim().toLowerCase())
+                    : true
+            );
+    
+            var actividadesUnicas = [...new Set(actividadesFiltradas
+                .map(a => a.Concepto)
+                .filter(concepto => concepto.toLowerCase().includes(filtroTexto))
+            )];
+    
+            listaSectores.innerHTML = "";
+    
+            // Agregar opción "Ninguno"
+            var opcionNinguno = document.createElement("li");
+            opcionNinguno.textContent = "Ninguno";
+            opcionNinguno.classList.add("sector-item");
+            opcionNinguno.addEventListener("click", function() {
+                filtrarMapa(null);
+                resaltarSeleccion(null);
+            });
+            listaSectores.appendChild(opcionNinguno);
+    
+            // Agregar actividades filtradas a la lista
+            actividadesUnicas.forEach(actividad => {
+                var li = document.createElement("li");
+                li.textContent = actividad;
+                li.classList.add("sector-item");
+                li.addEventListener("click", function() {
+                    filtrarMapa(actividad);
+                    resaltarSeleccion(actividad);
+                });
+                listaSectores.appendChild(li);
+            });
+    
+            if (distritosFiltrados.length === 0) {
+                cargarGeoJSON(null);
+            }
+        }
+    
+        // Función para resaltar la actividad seleccionada
+        function resaltarSeleccion(actividadSeleccionada) {
+            document.querySelectorAll("#sector-list li").forEach(li => {
+                if (li.textContent === actividadSeleccionada) {
+                    li.style.backgroundColor = "#4CAF50";
+                    li.style.color = "white";
+                } else {
+                    li.style.backgroundColor = "";
+                    li.style.color = "";
+                }
+            });
+        }
+    
+        // Cargar el archivo GeoJSON
+        function cargarGeoJSON(actividadInicial) {
+            fetch('secciones_unificado.geojson')
+                .then(response => response.json())
+                .then(data => {
+                    geojsonData = data;
+                    filtrarMapa(actividadInicial);
+                })
+                .catch(error => console.error("Error cargando el GeoJSON:", error));
+        }
+    
+        // Filtrar y actualizar el mapa basado en la actividad seleccionada
+        function filtrarMapa(actividadSeleccionada) {
+            if (!actividadSeleccionada) {
+                if (geojsonLayer) {
+                    map.removeLayer(geojsonLayer);
+                }
+                markerCluster.clearLayers();
+                return;
+            }
+    
+            var distritosFiltrados = actividades
+                .filter(a => a.Concepto.toLowerCase() === actividadSeleccionada.toLowerCase())
+                .map(a => a.DISTRITO ? a.DISTRITO.trim().toLowerCase() : "");
+    
+            if (!geojsonData) {
+                console.error("GeoJSON aún no está cargado.");
+                return;
+            }
+    
+            if (geojsonLayer) {
+                map.removeLayer(geojsonLayer);
+            }
+            markerCluster.clearLayers();
+    
+            geojsonLayer = L.geoJson(geojsonData, {
+                filter: function(feature) {
+                    var distritoGeo = feature.properties.DISTRITO ? feature.properties.DISTRITO.trim().toLowerCase() : "";
+                    return distritosFiltrados.includes(distritoGeo);
+                },
+                style: function(feature) {
+                    return {
+                        fillColor: "blue",
+                        color: "black",
+                        weight: 1,
+                        fillOpacity: 0.5
+                    };
+                },
+                onEachFeature: function(feature, layer) {
+                    if (feature.properties && feature.properties.DISTRITO) {
+                        let customPopup = `
+                        <h2 style="font-size: 1vw;">
+                            IDGIS: ${feature.properties.IDGIS}
+                        </h2>
+                        <p>Datos:</p>
+                        <ul>
+                            <li>Sección: ${feature.properties.SEC}</li>
+                            <li>Chacra: ${feature.properties.CHA}</li>
+                            <li>Manzana: ${feature.properties.MAN}</li>
+                            <li>Parcela: ${feature.properties.PAR}</li>
+                            <li>Lote: ${feature.properties.LOTE}</li>
+                            <li>Distrito: ${feature.properties.DISTRITO}</li>
+                        </ul>
+                        `;
+                        layer.bindPopup(customPopup);
+                    }
+                    markerCluster.addLayer(layer);
+                }
+            });
+    
+            map.addLayer(markerCluster);
+            map.addLayer(geojsonLayer);
+        }
+    </script>
+</body>
+</html>
