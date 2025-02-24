@@ -15,6 +15,12 @@
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://unpkg.com/leaflet.markercluster/dist/leaflet.markercluster.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/2.4.0/purify.min.js"></script>
+    <!-- pdf -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.3.3/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.4.0/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.9.3/html2pdf.bundle.min.js"></script>
+
 
     <style>
         html, body {
@@ -105,6 +111,7 @@
         #map {
             flex-grow: 1;
             height: 100%;
+            z-index: 1; /* Asegura que el mapa quede en el fondo */
         }
 
         .dropdown-menu {
@@ -113,6 +120,10 @@
 
         h2 {
             font-size: 2.4vw;
+        }
+        h3 {
+            font-size: 1.5vw;
+            margin-top: 10px;
         }
         .btn-group button.active {
             background-color: #2ca25f; /* Color activo */
@@ -139,14 +150,18 @@
                 <h2>Habilitaciones comerciales</h2>
                 <div class="btn-group">
                     <button class="btn btn-secondary" onclick="cambiarModo('idgis')">Buscar por IDGIS</button>
-                    <button class="btn btn-secondary" onclick="cambiarModo('actividad')">Buscar por Actividad</button>
+                    <button id="buscar-actividad-btn" class="btn btn-secondary" onclick="cambiarModo('actividad')">Buscar por actividad</button>
                 </div>
                 <input type="text" id="buscador-idgis" class="form-control" placeholder="Buscar por IDGIS...">
                 <input type="text" id="buscador-concepto" class="form-control" placeholder="Buscar por actividad comercial..."
                   style="display:none;">
+                <h3>Lista de actividades que pueden ser habilitadas</h3>
                 <div id="sector-list-container">
                     <ul id="sector-list"></ul>
                 </div>
+                <button id="ver-documentacion" class="btn btn-primary" style="display: none; margin-top: 10px; background-color: #2ca25f;border-color: #2ca25f;">
+                    Ver documentación para habilitar la actividad
+                </button>
             </div>
             <div>
                 <div id="map"></div>
@@ -189,6 +204,7 @@
             // Agregar la clase 'active' al botón seleccionado
             if (modo === 'idgis') {
                 document.querySelector('.btn-group button:nth-child(1)').classList.add('active');
+                document.getElementById("ver-documentacion").style.display = "none"; // Ocultar el botón en modo IDGIS
             } else {
                 document.querySelector('.btn-group button:nth-child(2)').classList.add('active');
             }
@@ -406,6 +422,14 @@
                     li.style.color = "";
                 }
             });
+            // Mostrar el botón solo si hay una actividad seleccionada
+            let btnDocumentacion = document.getElementById("ver-documentacion");
+            if (actividadSeleccionada) {
+                btnDocumentacion.style.display = "block";
+                btnDocumentacion.setAttribute("data-actividad", actividadSeleccionada); // Guardar la actividad seleccionada
+            } else {
+                btnDocumentacion.style.display = "none";
+            }
         }
 
         // Cargar el archivo GeoJSON
@@ -553,6 +577,222 @@
             map.addLayer(markerCluster);
             map.addLayer(geojsonLayer);
         }
+
+        // documentacion requerida
+        document.getElementById("ver-documentacion").addEventListener("click", function () {
+            let actividadSeleccionada = this.getAttribute("data-actividad");
+            if (!actividadSeleccionada) return;
+
+            // Cargar datos de actividades2.json para obtener el riesgo de habilitación
+            fetch("actividades2.json")
+                .then(response => response.json())
+                .then(actividades => {
+                    let actividadInfo = actividades.find(a => a.Concepto === actividadSeleccionada);
+                    if (!actividadInfo) {
+                        alert("No se encontró información sobre la actividad.");
+                        return;
+                    }
+
+                    // let riesgo = actividadInfo.RIESGO || "No disponible";
+                    // Filtrar todas las filas de la actividad seleccionada en actividades2.json
+                    let paquetesUnicos = new Set(
+                        actividades
+                            .filter(a => a.Concepto === actividadSeleccionada) // Obtener todas las filas de la actividad
+                            .map(a => a["PAQUETE DE DOC REQUERIDA"]) // Extraer los paquetes de documentación
+                    );
+
+                    // Convertir el Set a un array y unir los paquetes en un string separado por comas (opcional)
+                    let paqueteDoc = [...paquetesUnicos].join(", ");
+                    // Filtrar las filas que corresponden a la actividad seleccionada
+                    var actividadData = actividades.filter(a => a.Concepto === actividadSeleccionada);
+                    // Extraer el riesgo (solo una vez, tomando el primero)
+                    var riesgo = actividadData.length > 0 ? actividadData[0].RIESGO : "No disponible";
+
+                    // Cargar documentación
+                    fetch("documentacion.json")
+                        .then(response => response.json())
+                        .then(documentacion => {
+                            let paquetesArray = [...paquetesUnicos]; // Convertimos el Set en un array
+                            let docsFiltradas = documentacion.filter(d => paquetesArray.includes(d["PAQUETE DE DOC REQUERIDA"]));    
+                            let paquetesAgrupados = new Map();
+                            // Agrupar la documentación por paquete
+                            docsFiltradas.forEach(doc => {
+                                let paquete = doc["PAQUETE DE DOC REQUERIDA"];
+                                let documento = doc["Documentación"];
+
+                                if (!paquetesAgrupados.has(paquete)) {
+                                    paquetesAgrupados.set(paquete, new Set()); // Usamos Set para evitar duplicados
+                                }
+                                paquetesAgrupados.get(paquete).add(documento);
+                            });
+                            // Construir la ventana emergente
+                            let contenido = `<h2>${actividadSeleccionada}</h2>`;
+                            contenido += `<p><strong>Tipo de riesgo:</strong> ${riesgo}</p>`;
+                            contenido += `<h3>Documentación necesaria para habilitar la actividad</h3>`;
+
+                            // Generar el contenido asegurando que todos los paquetes sean incluidos
+                            paquetesAgrupados.forEach((documentos, paquete) => {
+                                contenido += `<p><strong>${paquete}</strong></p><ul>`;
+                                documentos.forEach(doc => {
+                                    contenido += `<li>${doc}</li>`;
+                                });
+                                contenido += `</ul>`;
+                            });
+
+                            // Crear el cartel interactivo
+                            let modal = document.createElement("div");
+                            modal.innerHTML = `
+                                <div id="modal-overlay" style="
+                                    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+                                    background: rgba(0, 0, 0, 0.5); z-index: 1000;
+                                    display: flex; justify-content: center; align-items: center;">
+                                    
+                                    <div id="modal-content" style="
+                                        background: white; padding: 20px; border-radius: 8px; 
+                                        width: 90%; max-width: 700px; max-height: 100%; overflow-y: auto;
+                                        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3); 
+                                        position: relative; text-align: justify;">
+                                        
+                                        <!-- Botón de cierre "X" en la esquina superior derecha -->
+                                        <nav class="navbar navbar-dark fixed-top" style="background-color: #003928;">
+                                            <div class="container-fluid">
+                                                <a class="navbar-brand" href="index.html" style="padding-left: 10px;">
+                                                    <img src="assets/LOGO POSADAS BLANCO.png" alt="Logo Posadas" width="20%">
+                                                </a>
+                                            </div>
+                                        </nav>
+                                        ${contenido}
+                                        <!-- Botón para descargar como PDF -->
+                                        <button class="btn btn-primary" id="descargar-pdf" style="margin-top: 20px; padding: 10px; background-color: #2ca25f; color: white; border: none; border-radius: 5px;">
+                                            Descargar PDF
+                                        </button>
+                                    </div>
+                                </div>
+                                <!-- Botón de cierre "X" fuera de la ventana modal -->
+                                <button id="cerrar-modal" style="
+                                    position: fixed; top: 10px; right: 10px; 
+                                    background: none; border: none; font-size: 20px; 
+                                    cursor: pointer; color: white; z-index: 1100;">✖</button>
+                            `;
+                            document.body.appendChild(modal);
+                            
+                            document.getElementById("descargar-pdf").addEventListener("click", function() {
+                                // Ocultar temporalmente los botones
+                                const cerrarBtn = document.getElementById("cerrar-modal");
+                                const descargarBtn = document.getElementById("descargar-pdf");
+                                if (cerrarBtn) cerrarBtn.style.display = "none";
+                                descargarBtn.style.display = "none";
+
+                                const element = document.getElementById("modal-content");
+
+                                // Ajustar estilos CSS para centrar el contenido
+                                const contentWidth = 210 - 20; // Ancho de la página A4 menos márgenes
+                                element.style.width = `${contentWidth}mm`;
+                                element.style.margin = "0 auto";
+
+                                const opt = {
+                                    margin: [10, 10, 10, 10],  // Márgenes superior, derecho, inferior, izquierdo
+                                    filename: 'Documentación requerida.pdf',
+                                    image: { type: 'jpeg', quality: 0.98 },
+                                    html2canvas: { scale: 2, useCORS: true },
+                                    jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+                                    pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
+                                };
+
+                                html2pdf().set(opt).from(element).save().then(function() {
+                                    // Volver a mostrar los botones
+                                    if (cerrarBtn) cerrarBtn.style.display = "block";
+                                    descargarBtn.style.display = "block";
+
+                                    // Restaurar estilos CSS originales
+                                    element.style.width = "";
+                                    element.style.margin = "";
+                                }).catch(function(error) {
+                                    console.error('Error al generar el PDF:', error);
+                                    // Volver a mostrar los botones si ocurre un error
+                                    if (cerrarBtn) cerrarBtn.style.display = "block";
+                                    descargarBtn.style.display = "block";
+
+                                    // Restaurar estilos CSS originales
+                                    element.style.width = "";
+                                    element.style.margin = "";
+                                });
+                            });
+
+
+
+                            // Cerrar modal al hacer clic en el botón
+                            setTimeout(() => {
+                                document.getElementById("cerrar-modal").addEventListener("click", function () {
+                                    modal.remove(); // Elimina el modal completamente del DOM
+                                });
+                            }, 100);
+                        })
+                        .catch(error => console.error("Error cargando la documentación:", error));
+                }).catch(error => console.error("Error cargando las actividades:", error)
+            );
+        });
+
+        document.addEventListener("DOMContentLoaded", function () {
+            let sectorList = document.getElementById("sector-list"); // Lista de actividades en "Buscar por Actividad"
+            let buscarPorActividadBtn = document.getElementById("buscar-actividad-btn"); // Botón para activar "Buscar por Actividad"
+            let buscarPorActividadInput = document.getElementById("buscador-concepto"); // Input de búsqueda por actividad
+            let buscarPorIDGISInput = document.getElementById("buscador-idgis"); // Input de búsqueda por IDGIS
+            let verDocumentacionBtn = document.getElementById("ver-documentacion"); // Botón de ver documentación
+            let modoBusqueda = "actividad"; // Variable para rastrear el estado de búsqueda
+
+            // segurar que el botón está oculto al inicio
+            verDocumentacionBtn.style.display = "none";
+
+            // Evento: Al hacer clic en "Buscar por Actividad", activar este modo y mostrar el botón
+            buscarPorActividadBtn.addEventListener("click", function () {
+                modoBusqueda = "actividad"; // Cambiar el estado a "actividad"
+                verDocumentacionBtn.style.display = "block"; // Mostrar botón
+                verDocumentacionBtn.removeAttribute("data-actividad"); // Limpiar actividad seleccionada
+            });
+
+            // 🔹 Evento: Si el usuario cambia a "Buscar por IDGIS", ocultar el botón
+            buscarPorIDGISInput.addEventListener("focus", function () {
+                modoBusqueda = "idgis"; // Cambiar el estado a "idgis"
+                verDocumentacionBtn.style.display = "none"; // Ocultar el botón
+                verDocumentacionBtn.removeAttribute("data-actividad");
+            });
+
+            // Evento: SOLO permitir la selección de actividades en "Buscar por Actividad"
+            // Función para manejar el clic en la lista
+            document.getElementById("sector-list").addEventListener("click", function(event) {
+                if (event.target.tagName === "LI") {
+                    let actividadSeleccionada = event.target.textContent.trim();
+
+                    // Verificar que estamos en "Buscar por Actividad"
+                    if (modoActual === "actividad") {
+                        verDocumentacionBtn.style.display = "block";  // Mostrar el botón en modo actividad
+                        verDocumentacionBtn.setAttribute("data-actividad", actividadSeleccionada); // Asociar la actividad seleccionada
+                    } else {
+                        verDocumentacionBtn.style.display = "none";  // Asegurar que el botón se oculta en modo IDGIS
+                    }
+                }
+            });
+
+            // Evento: Mostrar la documentación solo si hay una actividad seleccionada
+            verDocumentacionBtn.addEventListener("click", function () {
+                let actividadSeleccionada = this.getAttribute("data-actividad");
+
+                if (!actividadSeleccionada) {
+                    alert("Debe seleccionar una actividad primero.");
+                    return;
+                }
+
+                // Llamar a la función que muestra la documentación
+                mostrarDocumentacion(actividadSeleccionada);
+            });
+
+            // Función para mostrar la documentación
+            function mostrarDocumentacion(actividad) {
+                console.log("Mostrando documentación para:", actividad);
+                // Aquí puedes abrir un modal o generar la documentación requerida
+            }
+        });
     </script>
 </body>
 </html>
