@@ -133,6 +133,11 @@
         .btn-group button.active:hover {
             background-color: #006d2c; /* Color de hover cuando está activo */
         }
+
+        .form-control{
+            margin-bottom: 10px;
+        }
+
     </style>
 </head>
 <body>
@@ -155,7 +160,7 @@
                 <input type="text" id="buscador-idgis" class="form-control" placeholder="Buscar por IDGIS...">
                 <input type="text" id="buscador-concepto" class="form-control" placeholder="Buscar por actividad comercial..."
                   style="display:none;">
-                <h3>Lista de actividades que pueden ser habilitadas</h3>
+                <h3 id="titulo_actividades" style="display: none;">Lista de actividades que pueden ser habilitadas</h3>
                 <div id="sector-list-container">
                     <ul id="sector-list"></ul>
                 </div>
@@ -205,8 +210,10 @@
             if (modo === 'idgis') {
                 document.querySelector('.btn-group button:nth-child(1)').classList.add('active');
                 document.getElementById("ver-documentacion").style.display = "none"; // Ocultar el botón en modo IDGIS
+                document.getElementById("titulo_actividades").style.display = "none"; // No mostrar el título h3
             } else {
                 document.querySelector('.btn-group button:nth-child(2)').classList.add('active');
+                document.getElementById("titulo_actividades").style.display = "block";
             }
             cargarDatos();
             asignarEventosBusqueda();  // Asegúrate de asignar los eventos después de cambiar el modo
