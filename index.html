@@ -46,7 +46,7 @@
 
         .main {
             display: grid;
-            grid-template-columns: 50% 50%;
+            grid-template-columns: 40% 60%;
             gap: 10px;
             padding: 10px;
             height: 100%;
@@ -59,7 +59,7 @@
             overflow-y: auto;
         }
         #sector-list-container {
-            height: 80vh; /* 80% del viewport */
+            height: 60vh; /* 80% del viewport */
             overflow-y: auto; /* Para hacer scroll si hay muchos sectores */
             display: flex;
             flex-direction: column;
@@ -120,10 +120,10 @@
         }
 
         h2 {
-            font-size: 2.4vw;
+            font-size: 1.8vw;
         }
         h3 {
-            font-size: 1.5vw;
+            font-size: 1.3vw;
             margin-top: 10px;
         }
         .btn-group button.active {
@@ -137,6 +137,16 @@
 
         .form-control{
             margin-bottom: 10px;
+        }
+        /* Sacar dinámicamente el formato en busqueda por IDGIS */
+        .solo-lectura {
+            cursor: default !important;
+            pointer-events: none; /* Desactiva cualquier interacción */
+            background-color: transparent !important;
+        }
+
+        .solo-lectura:hover {
+            background-color: transparent !important;
         }
 
     </style>
@@ -211,10 +221,19 @@
             if (modo === 'idgis') {
                 document.querySelector('.btn-group button:nth-child(1)').classList.add('active');
                 document.getElementById("ver-documentacion").style.display = "none"; // Ocultar el botón en modo IDGIS
-                document.getElementById("titulo_actividades").style.display = "none"; // No mostrar el título h3
+                document.getElementById("titulo_actividades").style.display = "block"; // No mostrar el título h3
+
+                // Hacer que los elementos de la lista no parezcan clickeables
+                document.querySelectorAll("#sector-list li").forEach(li => {
+                    li.classList.add("solo-lectura");
+                });
             } else {
                 document.querySelector('.btn-group button:nth-child(2)').classList.add('active');
-                document.getElementById("titulo_actividades").style.display = "block";
+                document.getElementById("titulo_actividades").style.display = "none";
+                 // Restaurar interactividad en la lista
+                document.querySelectorAll("#sector-list li").forEach(li => {
+                    li.classList.remove("solo-lectura");
+                });
             }
             cargarDatos();
             asignarEventosBusqueda();  // Asegúrate de asignar los eventos después de cambiar el modo
@@ -224,7 +243,7 @@
             cambiarModo('idgis');  // Inicia en 'Buscar por IDGIS'
         }
         function cargarDatos() {
-            let archivo = (modoActual === 'idgis') ? 'actividades.json' : 'actividades2.json';
+            let archivo = (modoActual === 'idgis') ? 'actividades2.json' : 'actividades2.json';
             fetch(archivo)
                 .then(response => response.json())
                 .then(data => {
@@ -386,30 +405,35 @@
                 ? actividades.filter(a => distritosFiltrados.includes(a.DISTRITO.trim().toLowerCase()))
                 : actividades;
 
-            var actividadesUnicas = [...new Set(actividadesFiltradas.map(a => a.Actividad))];
+            var actividadesUnicas = [...new Set(actividadesFiltradas.map(a => a.Concepto))];
 
             // Limpiar opciones anteriores
             listaSectores.innerHTML = "";
 
             // Agregar opción "Ninguno"
             var opcionNinguno = document.createElement("li");
-            opcionNinguno.textContent = "Ninguno";
-            opcionNinguno.classList.add("sector-item");
-            opcionNinguno.addEventListener("click", function() {
-                filtrarMapaIDGIS(null); // Limpia el mapa
-                resaltarSeleccion(null);
-            });
+            opcionNinguno.textContent = actividadesUnicas[0];
+            
+            // Si estamos en IDGIS, deshabilitar interacción
+            if (modoActual === "idgis") {
+                opcionNinguno.classList.add("solo-lectura");
+            } else {
+                opcionNinguno.classList.add("sector-item"); // Mantener interacción en "Buscar por Actividad"
+            }
+
             listaSectores.appendChild(opcionNinguno);
 
             // Agregar las actividades únicas filtradas
-            actividadesUnicas.forEach(actividad => {
+            actividadesUnicas.slice(1).forEach(actividad => {
                 var li = document.createElement("li");
                 li.textContent = actividad;
-                li.classList.add("sector-item"); // Clase para resaltar selección
-                li.addEventListener("click", function() {
-                    filtrarMapaIDGIS(actividad);
-                    resaltarSeleccion(actividad);
-                });
+
+                if (modoActual === "idgis") {
+                    li.classList.add("solo-lectura");
+                } else {
+                    li.classList.add("sector-item"); // Clase para resaltar selección solo en "Buscar por Actividad"
+                }
+
                 listaSectores.appendChild(li);
             });
 
@@ -597,7 +621,7 @@
                 .then(actividades => {
                     let actividadInfo = actividades.find(a => a.Concepto === actividadSeleccionada);
                     if (!actividadInfo) {
-                        alert("No se encontró información sobre la actividad.");
+                        alert("Debe seleccionar una actividad primero.");
                         return;
                     }
 
@@ -662,10 +686,10 @@
                                         position: relative; text-align: justify;">
                                         
                                         <!-- Botón de cierre "X" en la esquina superior derecha -->
-                                        <nav class="navbar navbar-dark fixed-top" style="background-color: #003928;">
+                                        <nav class="navbar" style="background-color: white;">
                                             <div class="container-fluid">
-                                                <a class="navbar-brand" href="index.html" style="padding-left: 10px;">
-                                                    <img src="assets/LOGO POSADAS BLANCO.png" alt="Logo Posadas" width="20%">
+                                                <a class="navbar-brand" href="index.html" style="padding-left: 10px; text-align:center">
+                                                    <img src="assets/Escudo-posadas-secre-y-muni.png" alt="Logo Posadas" width="80%">
                                                 </a>
                                             </div>
                                         </nav>
