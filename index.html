@@ -149,6 +149,15 @@
             background-color: transparent !important;
         }
 
+        /* Estilo para boton de documentacion al seleccionar actividad */
+        .btn-resaltado {
+            background-color: #2ca25f !important;
+            color: white !important;
+            border: 2px solid #218c4e !important;
+            box-shadow: 0px 4px 8px rgba(0, 0, 0, 0.2);
+            transition: all 0.2s ease-in-out;
+        }
+
     </style>
 </head>
 <body>
@@ -175,7 +184,7 @@
                 <div id="sector-list-container">
                     <ul id="sector-list"></ul>
                 </div>
-                <button id="ver-documentacion" class="btn btn-primary" style="display: none; margin-top: 10px; background-color: #2ca25f;border-color: #2ca25f;">
+                <button id="ver-documentacion" class="btn btn-secondary" style="display: none; margin-top: 10px;">
                     Ver documentación para habilitar la actividad
                 </button>
             </div>
@@ -234,6 +243,11 @@
                 document.querySelectorAll("#sector-list li").forEach(li => {
                     li.classList.remove("solo-lectura");
                 });
+                // Cuando se cambia a "Buscar por actividad", resetear el botón de documentación
+                let verDocumentacionBtn = document.getElementById("ver-documentacion");
+                verDocumentacionBtn.classList.remove("btn-resaltado");
+                verDocumentacionBtn.classList.add("btn-secondary");
+                verDocumentacionBtn.removeAttribute("data-actividad");
             }
             cargarDatos();
             asignarEventosBusqueda();  // Asegúrate de asignar los eventos después de cambiar el modo
@@ -823,6 +837,43 @@
             function mostrarDocumentacion(actividad) {
                 console.log("Mostrando documentación para:", actividad);
                 // Aquí puedes abrir un modal o generar la documentación requerida
+            }
+        });
+
+        // color para listado de ver documentación
+        // crear el evento al hacer click en un sector
+        document.getElementById("sector-list").addEventListener("click", function (event) {
+            let verDocumentacionBtn = document.getElementById("ver-documentacion");
+
+            if (modoActual === "actividad" && event.target.tagName === "LI") {
+                let actividadSeleccionada = event.target.textContent.trim();
+
+                // Agregar clase de resaltado y cambiar estilos
+                verDocumentacionBtn.classList.remove("btn-secondary");
+                verDocumentacionBtn.classList.add("btn-resaltado");
+                verDocumentacionBtn.setAttribute("data-actividad", actividadSeleccionada);
+            }
+        });
+        // Restablecer estilos al cambiar de modo o hacer clic fuera
+        document.addEventListener("click", function (event) {
+            // Verificar que el evento se activa
+            let verDocumentacionBtn = document.getElementById("ver-documentacion");
+            let sectorList = document.getElementById("sector-list");
+            let opcionNinguno = document.querySelector("#sector-list li:first-child"); // Primer <li> ("Ninguno")
+
+            if (modoActual === "actividad") {
+                // Si hizo clic en "Ninguno", solo quitar el resaltado sin ocultar el botón
+                if (event.target === opcionNinguno) {
+                    console.log("🟡 Se hizo clic en 'Ninguno', deseleccionando actividad.");
+                    verDocumentacionBtn.classList.remove("btn-resaltado");
+                    verDocumentacionBtn.classList.add("btn-secondary");
+                    verDocumentacionBtn.removeAttribute("data-actividad");
+                }
+            }
+            if (modoActual === "idgis") {
+                verDocumentacionBtn.classList.remove("btn-resaltado");
+                verDocumentacionBtn.classList.add("btn-secondary");
+                verDocumentacionBtn.removeAttribute("data-actividad");
             }
         });
     </script>
