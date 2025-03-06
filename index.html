@@ -120,10 +120,10 @@
         }
 
         h2 {
-            font-size: 1.8vw;
+            font-size: 1.6vw;
         }
         h3 {
-            font-size: 1.3vw;
+            font-size: 1.2vw;
             margin-top: 10px;
         }
         .btn-group button.active {
@@ -197,7 +197,10 @@
     <script>
         var map = L.map('map').setView([-27.370373, -55.892994], 12);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '&copy; OpenStreetMap contributors'
+            attribution: '&copy; OpenStreetMap contributors',
+            detectRetina: true,
+            maxZoom: 18,
+            minZoom: 10
         }).addTo(map);
     
         var geojsonData;
@@ -253,9 +256,9 @@
             asignarEventosBusqueda();  // Asegúrate de asignar los eventos después de cambiar el modo
         }
         // Función que se ejecuta al cargar la página para configurar el modo inicial
-        window.onload = function() {
-            cambiarModo('idgis');  // Inicia en 'Buscar por IDGIS'
-        }
+        window.onload = function () {
+            cambiarModo('idgis'); // Activa el modo IDGIS al inicio
+        };
         function cargarDatos() {
             let archivo = (modoActual === 'idgis') ? 'actividades2.json' : 'actividades2.json';
             fetch(archivo)
@@ -269,6 +272,15 @@
                     }
                 })
                 .catch(error => console.error("Error cargando datos:", error));
+        }
+
+        // Función auxiliar para actualizar las listas según el modo actual
+        function actualizarListas() {
+            if (modoActual === "actividad") {
+                actualizarListaSectoresActividad();
+            } else {
+                actualizarListaSectoresIDGIS();
+            }
         }
 
         // Crear función debounce
@@ -369,20 +381,21 @@
         // Llenar la lista en infoExtra con actividades
         function actualizarListaSectoresActividad(filtroTexto = "") {
             var listaSectores = document.getElementById("sector-list");
-    
+            let fragment = document.createDocumentFragment(); // Fragmento para mejorar rendimiento
+
             var actividadesFiltradas = actividades.filter(a => 
                 distritosFiltrados.length > 0 
                     ? distritosFiltrados.includes(a.DISTRITO.trim().toLowerCase())
                     : true
             );
-    
+
             var actividadesUnicas = [...new Set(actividadesFiltradas
                 .map(a => a.Concepto)
                 .filter(concepto => concepto.toLowerCase().includes(filtroTexto))
             )];
-    
-            listaSectores.innerHTML = "";
-    
+
+            listaSectores.innerHTML = ""; // Limpiar la lista antes de agregar nuevos elementos
+
             // Agregar opción "Ninguno"
             var opcionNinguno = document.createElement("li");
             opcionNinguno.textContent = "Ninguno";
@@ -391,9 +404,9 @@
                 filtrarMapaActividades(null);
                 resaltarSeleccion(null);
             });
-            listaSectores.appendChild(opcionNinguno);
-    
-            // Agregar actividades filtradas a la lista
+            fragment.appendChild(opcionNinguno); // Agregar al fragmento en lugar del DOM directamente
+
+            // Agregar actividades filtradas a la lista usando el fragmento
             actividadesUnicas.forEach(actividad => {
                 var li = document.createElement("li");
                 li.textContent = actividad;
@@ -402,9 +415,11 @@
                     filtrarMapaActividades(actividad);
                     resaltarSeleccion(actividad);
                 });
-                listaSectores.appendChild(li);
+                fragment.appendChild(li);
             });
-    
+
+            listaSectores.appendChild(fragment); // Agregar todo el fragmento de una sola vez
+
             if (distritosFiltrados.length === 0) {
                 cargarGeoJSON(null);
             }
