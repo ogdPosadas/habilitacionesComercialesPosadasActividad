@@ -205,7 +205,7 @@
     
         var geojsonData;
         var geojsonLayer;
-        var actividades = [];
+        var actividades = null;
         var geojsonData = null;
         var distritosFiltrados = [];
         var markerCluster = L.markerClusterGroup();
@@ -221,58 +221,76 @@
             }
         }
 
+        // let actividades = null; // Variable global para almacenar los datos cargados inicialmente
+        function actualizarVista() {
+            if (modoActual === 'actividad') {
+                actualizarListaSectoresActividad();
+            } else {
+                actualizarListaSectoresIDGIS();
+            }
+        }
+        function cargarDatos() {
+            if (actividades) {
+                console.log("Datos ya cargados:", actividades);
+                // Si ya se han cargado los datos, simplemente actualiza la vista
+                actualizarVista();
+                return;
+            }
+
+            // Cargar los datos solo la primera vez
+            let archivo = 'actividades2.json';
+            fetch(archivo)
+                .then(response => response.json())
+                .then(data => {
+                    actividades = data; // Almacenar los datos en la variable global
+                    console.log("Datos cargados por primera vez:", actividades);
+                    actualizarVista(); // Actualizar la vista después de cargar los datos
+                })
+                .catch(error => console.error("Error cargando datos:", error));
+        }
+
+        // Llama a cargarDatos cada vez que cambies de modo
         function cambiarModo(modo) {
             modoActual = modo;
             document.getElementById("buscador-idgis").style.display = (modo === 'idgis') ? 'block' : 'none';
             document.getElementById("buscador-concepto").style.display = (modo === 'actividad') ? 'block' : 'none';
-            // Remover la clase 'active' de ambos botones
+
+            // Actualizar las clases activas en los botones
             const botones = document.querySelectorAll('.btn-group button');
             botones.forEach(boton => boton.classList.remove('active'));
 
-            // Agregar la clase 'active' al botón seleccionado
             if (modo === 'idgis') {
                 document.querySelector('.btn-group button:nth-child(1)').classList.add('active');
-                document.getElementById("ver-documentacion").style.display = "none"; // Ocultar el botón en modo IDGIS
-                document.getElementById("titulo_actividades").style.display = "block"; // No mostrar el título h3
+                document.getElementById("ver-documentacion").style.display = "none";
+                document.getElementById("titulo_actividades").style.display = "block";
 
-                // Hacer que los elementos de la lista no parezcan clickeables
                 document.querySelectorAll("#sector-list li").forEach(li => {
                     li.classList.add("solo-lectura");
                 });
             } else {
                 document.querySelector('.btn-group button:nth-child(2)').classList.add('active');
                 document.getElementById("titulo_actividades").style.display = "none";
-                 // Restaurar interactividad en la lista
+
                 document.querySelectorAll("#sector-list li").forEach(li => {
                     li.classList.remove("solo-lectura");
                 });
-                // Cuando se cambia a "Buscar por actividad", resetear el botón de documentación
+
                 let verDocumentacionBtn = document.getElementById("ver-documentacion");
                 verDocumentacionBtn.classList.remove("btn-resaltado");
                 verDocumentacionBtn.classList.add("btn-secondary");
                 verDocumentacionBtn.removeAttribute("data-actividad");
             }
+
+            // Cargar o actualizar los datos según sea necesario
             cargarDatos();
-            asignarEventosBusqueda();  // Asegúrate de asignar los eventos después de cambiar el modo
+            asignarEventosBusqueda();
         }
+
+
         // Función que se ejecuta al cargar la página para configurar el modo inicial
         window.onload = function () {
             cambiarModo('idgis'); // Activa el modo IDGIS al inicio
         };
-        function cargarDatos() {
-            let archivo = (modoActual === 'idgis') ? 'actividades2.json' : 'actividades2.json';
-            fetch(archivo)
-                .then(response => response.json())
-                .then(data => {
-                    actividades = data;
-                    if (modoActual === 'actividad') {
-                        actualizarListaSectoresActividad();
-                    } else {
-                        actualizarListaSectoresIDGIS();
-                    }
-                })
-                .catch(error => console.error("Error cargando datos:", error));
-        }
 
         // Función auxiliar para actualizar las listas según el modo actual
         function actualizarListas() {
