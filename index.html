@@ -202,6 +202,30 @@
             maxZoom: 18,
             minZoom: 10
         }).addTo(map);
+
+        // Capas base disponibles
+        var baseMaps = {
+            "OpenStreetMap": L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '&copy; OpenStreetMap contributors',
+                detectRetina: true,
+                maxZoom: 18,
+                minZoom: 10
+            }),
+            "OpenStreetMap Humanitarian": L.tileLayer('https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png', {
+                attribution: '&copy; OpenStreetMap France'
+            }),
+            "OpenTopoMap": L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
+                attribution: '&copy; OpenTopoMap'
+            }),
+            "ESRI Satélite": L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'),
+            "ESRI Topográfico": L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}'),
+            "Carto Positron": L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+                attribution: '&copy; CartoDB'
+            }),
+            "Carto Dark Matter": L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+                attribution: '&copy; CartoDB'
+            })
+        };
     
         var geojsonData;
         var geojsonLayer;
@@ -350,7 +374,7 @@
                     }
                     geojsonLayer = L.geoJson(featureEncontrado, {
                         style: {
-                            fillColor: "red",  // Color resaltado
+                            fillColor: "#006d2c",  // Color resaltado
                             color: "black",
                             weight: 2,
                             fillOpacity: 0.7
@@ -512,11 +536,49 @@
         }
 
         // Cargar el archivo GeoJSON
+        var geojsonLayer;
+        var layerControl = L.control.layers(baseMaps, null, { collapsed: true }).addTo(map);
+        var secciones = {}; // Almacena las capas de cada sección   
+
         function cargarGeoJSON(actividadInicial) {
             fetch('secciones_unificado.geojson')
                 .then(response => response.json())
                 .then(data => {
                     geojsonData = data;
+                    data.features.forEach(feature => {
+                        let sec = feature.properties.SEC;
+                        if (!sec || sec === "null") return; // Ignorar valores nulos
+                        if (!secciones[sec]) {
+                            secciones[sec] = L.layerGroup();
+                        }
+                        let layer = L.geoJson(feature, {
+                            style: { color: '#006d2c', weight: 2 },
+                            onEachFeature: function (feature, layer) {
+                                let customPopupLayerC = `
+                                    <h2 style="font-size: 1vw;">
+                                        IDGIS: ${feature.properties.IDGIS}
+                                    </h2>
+                                    <p>Datos:</p>
+                                    <ul>
+                                        <li>Sección: ${feature.properties.SEC}</li>
+                                        <li>Chacra: ${feature.properties.CHA}</li>
+                                        <li>Manzana: ${feature.properties.MAN}</li>
+                                        <li>Parcela: ${feature.properties.PAR}</li>
+                                        <li>Lote: ${feature.properties.LOTE}</li>
+                                        <li>Distrito: ${feature.properties.DISTRITO}</li>
+                                    </ul>
+                                    `;
+                                layer.bindPopup(customPopupLayerC);
+                            }
+                        });
+                        secciones[sec].addLayer(layer);
+                    });
+                    
+                    // Ordenar secciones numéricamente y agregarlas al layer control
+                    Object.keys(secciones).sort().forEach(sec => {
+                        layerControl.addOverlay(secciones[sec], `Sección ${sec}`);
+                    });
+                
                     if (modoActual === 'actividad') {
                         filtrarMapaActividades(actividadInicial);
                     } else {
@@ -558,7 +620,7 @@
                 },
                 style: function(feature) {
                     return {
-                        fillColor: "blue",
+                        fillColor: "#006d2c",
                         color: "black",
                         weight: 1,
                         fillOpacity: 0.5
@@ -625,7 +687,7 @@
                 },
                 style: function(feature) {
                     return {
-                        fillColor: "blue",
+                        fillColor: "#006d2c",
                         color: "black",
                         weight: 1,
                         fillOpacity: 0.5
