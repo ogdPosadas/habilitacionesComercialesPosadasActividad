@@ -538,10 +538,8 @@
             }
         }
 
-        // Cargar el archivo GeoJSON
         var geojsonLayer;
         var secciones = {}; // Almacena las capas de cada sección
-
         var layerControl = L.control.layers(baseMaps, null, { collapsed: true }).addTo(map);
 
         function cargarGeoJSON(actividadInicial) {
@@ -549,51 +547,55 @@
                 .then(response => response.json())
                 .then(data => {
                     geojsonData = data;
-                    
-                    // Limpiar el layerControl y las secciones antes de agregar nuevas
+
+                    // Limpiar el layerControl y las secciones antes de agregar nuevas capas
                     Object.keys(secciones).forEach(sec => {
                         layerControl.removeLayer(secciones[sec]);
                     });
                     secciones = {}; // Reiniciar las secciones
-                    
-                    data.features.forEach(feature => {
-                        let sec = feature.properties.SEC;
-                        if (!sec || sec === "null") return; // Ignorar valores nulos
-                        if (!secciones[sec]) {
-                            secciones[sec] = L.layerGroup();
-                        }
-                        let layer = L.geoJson(feature, {
-                            style: { color: '#006d2c', weight: 2 },
-                            onEachFeature: function (feature, layer) {
-                                let customPopupLayerC = `
-                                    <h2 style="font-size: 1vw;">
-                                        IDGIS: ${feature.properties.IDGIS}
-                                    </h2>
-                                    <p>Datos:</p>
-                                    <ul>
-                                        <li>Sección: ${feature.properties.SEC}</li>
-                                        <li>Chacra: ${feature.properties.CHA}</li>
-                                        <li>Manzana: ${feature.properties.MAN}</li>
-                                        <li>Parcela: ${feature.properties.PAR}</li>
-                                        <li>Lote: ${feature.properties.LOTE}</li>
-                                        <li>Distrito: ${feature.properties.DISTRITO}</li>
-                                    </ul>
-                                    `;
-                                layer.bindPopup(customPopupLayerC);
-                            }
-                        });
-                        secciones[sec].addLayer(layer);
-                    });
-                    
-                    // Ordenar secciones numéricamente y agregarlas al layer control
-                    Object.keys(secciones).sort().forEach(sec => {
-                        layerControl.addOverlay(secciones[sec], `Sección ${sec}`);
-                    });
-                    
+
                     if (modoActual === 'actividad') {
                         filtrarMapaActividades(actividadInicial);
                     } else {
                         filtrarMapaIDGIS(actividadInicial);
+
+                        // Recorrer las features y agruparlas por sección
+                        data.features.forEach(feature => {
+                            let sec = feature.properties.SEC;
+                            if (!sec || sec === "null") return; // Ignorar valores nulos
+
+                            if (!secciones[sec]) {
+                                secciones[sec] = L.layerGroup();
+                            }
+
+                            let layer = L.geoJson(feature, {
+                                style: { color: '#006d2c', weight: 2 },
+                                onEachFeature: function (feature, layer) {
+                                    let customPopupLayerC = `
+                                        <h2 style="font-size: 1vw;">
+                                            IDGIS: ${feature.properties.IDGIS}
+                                        </h2>
+                                        <p>Datos:</p>
+                                        <ul>
+                                            <li>Sección: ${feature.properties.SEC}</li>
+                                            <li>Chacra: ${feature.properties.CHA}</li>
+                                            <li>Manzana: ${feature.properties.MAN}</li>
+                                            <li>Parcela: ${feature.properties.PAR}</li>
+                                            <li>Lote: ${feature.properties.LOTE}</li>
+                                            <li>Distrito: ${feature.properties.DISTRITO}</li>
+                                        </ul>
+                                    `;
+                                    layer.bindPopup(customPopupLayerC);
+                                }
+                            });
+
+                            secciones[sec].addLayer(layer);
+                        });
+
+                        // Agregar las secciones al layerControl solo si el modo es 'idgis'
+                        Object.keys(secciones).sort().forEach(sec => {
+                            layerControl.addOverlay(secciones[sec], `Sección ${sec}`);
+                        });
                     }
                 })
                 .catch(error => console.error("Error cargando el GeoJSON:", error));
