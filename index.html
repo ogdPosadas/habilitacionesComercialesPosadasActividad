@@ -196,12 +196,12 @@
 
     <script>
         var map = L.map('map').setView([-27.370373, -55.892994], 12);
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '&copy; OpenStreetMap contributors',
-            detectRetina: true,
-            maxZoom: 18,
-            minZoom: 10
-        }).addTo(map);
+        // L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        //     attribution: '&copy; OpenStreetMap contributors',
+        //     detectRetina: true,
+        //     maxZoom: 18,
+        //     minZoom: 10
+        // }).addTo(map);
 
         // Capas base disponibles
         var baseMaps = {
@@ -226,7 +226,10 @@
                 attribution: '&copy; CartoDB'
             })
         };
-    
+        
+        // Añadir OpenStreetMap por defecto
+        baseMaps["OpenStreetMap"].addTo(map);
+
         var geojsonData;
         var geojsonLayer;
         var actividades = null;
@@ -537,14 +540,22 @@
 
         // Cargar el archivo GeoJSON
         var geojsonLayer;
+        var secciones = {}; // Almacena las capas de cada sección
+
         var layerControl = L.control.layers(baseMaps, null, { collapsed: true }).addTo(map);
-        var secciones = {}; // Almacena las capas de cada sección   
 
         function cargarGeoJSON(actividadInicial) {
             fetch('secciones_unificado.geojson')
                 .then(response => response.json())
                 .then(data => {
                     geojsonData = data;
+                    
+                    // Limpiar el layerControl y las secciones antes de agregar nuevas
+                    Object.keys(secciones).forEach(sec => {
+                        layerControl.removeLayer(secciones[sec]);
+                    });
+                    secciones = {}; // Reiniciar las secciones
+                    
                     data.features.forEach(feature => {
                         let sec = feature.properties.SEC;
                         if (!sec || sec === "null") return; // Ignorar valores nulos
@@ -578,7 +589,7 @@
                     Object.keys(secciones).sort().forEach(sec => {
                         layerControl.addOverlay(secciones[sec], `Sección ${sec}`);
                     });
-                
+                    
                     if (modoActual === 'actividad') {
                         filtrarMapaActividades(actividadInicial);
                     } else {
@@ -587,6 +598,7 @@
                 })
                 .catch(error => console.error("Error cargando el GeoJSON:", error));
         }
+
 
         // filtrar mapas 
         // Actividades
